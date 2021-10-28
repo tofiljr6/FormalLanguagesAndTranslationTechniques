@@ -10,7 +10,7 @@ def KMPMatcher(T, P):
             q += 1
         if q == m:
             print("Pattern occurs with shift", i - m + 1)
-            q = pi[q-1] + 1
+            q = pi[q-1] 
 
 
 def ComputePrefixFunction(P):
