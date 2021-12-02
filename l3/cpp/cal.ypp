@@ -1,0 +1,172 @@
+%{
+  #define YYSTYPE int
+
+  #include <stdio.h>
+  #include <math.h>
+  #include <string>
+  
+  #define p 1234577
+
+  using namespace std;
+
+  int yylex();
+  int yyerror(string);
+  extern int yylineno;
+
+  int divide(int a, int b) {
+    return floor((double) a / (double) b);
+  }
+
+  int modulo(int a, int b) {
+    return a - divide(a, b) * b;
+  }
+
+  int multiply(int a, int b) {
+    int result = 0;
+    while (b > 0) {
+      if (b % 2 == 1) {
+        result = (result + a) % p;
+      }
+      a = (a * 2) % p;
+      b /= 2;
+    }
+    return modulo(result, p);
+  }
+  
+  int reci(int a) {
+    int u, w, x, z, q;
+
+    u = 1;
+    w = a;
+    x = 0;
+    z = p;
+    while (w != 0) {
+      if (w < z) {
+        q = u;
+        u = x;
+        x = q;
+        q = w;
+        w = z;
+        z = q;
+      }
+      q = w / z;
+      u -= q * x;
+      w -= q * z;
+    }
+    if (x < 0) {
+      x += p;    
+    }
+    return x;
+  }
+  
+  int power(int a, int b) {
+    int result = a;
+    for (int i = 1; i < b; i++) {
+      result = multiply(result, a);
+    }
+    return result;
+  }
+
+  string rpn = "";
+  int error = 0;
+  int minusexp = 0;
+%}
+
+%token NUM
+%token LBRACKET
+%token RBRACKET
+
+%left PLUS MINUS
+%left MULT DIV MOD
+%right POW
+%precedence NEG
+
+%token END
+%token ERROR
+
+%% /* Grammar rules and actions follow. */
+
+input:
+  %empty
+| input line
+;
+
+line:   expr END {
+                    if (!error) {
+                        printf("%s\n= %d\n", rpn.c_str(), $$);
+                    }
+                    error = 0;
+                    rpn = "";
+
+                }
+        | error END {
+                        printf("Błąd w linii %d\n", yylineno - 1);
+                        error = 0;
+                        rpn = "";
+        }
+;
+
+expr:
+    NUM                         { 
+                                  rpn += to_string($1) + " ";
+                                  $$ = modulo($1,p);
+                                }
+    | expr PLUS expr            { 
+                                  rpn += "+ ";
+                                  int tmp = $1 + $3;
+                                  $$ = modulo(tmp, p);
+                                  
+                                }
+    | expr MINUS expr           { 
+                                  rpn += "- ";
+                                  int tmp = $1 - $3;
+                                  $$ = modulo(tmp, p);
+                                }
+    | expr MULT expr            { 
+                                  rpn += "* ";
+                                  $$ = multiply($1, $3);
+                                }
+    | expr DIV expr             { rpn += "/ ";
+                                  if ($3 == 0) {
+                                      printf("%s\n", rpn.c_str());
+                                      yyerror("Nie dzielimy przez 0");
+                                  } else {
+                                      $$ = multiply($1, reci($3));
+                                  } 
+                                }
+    | MINUS NUM %prec NEG       { 
+                                  while (p - $2 < 0) {
+                                    $2 += p;
+                                  }
+                                  if (rpn.find("^")) {
+                                    minusexp = 1;
+                                    rpn += to_string(modulo(p - $2 - 1,p)) + " ";  
+                                  } else {
+                                    rpn += to_string(modulo(p - $2,p)) + " ";
+                                  }
+                                  
+                                  $$ = modulo(p - $2,p);
+                                }
+    | expr POW expr             { 
+                                  rpn += "^ "; 
+                                  if (minusexp == 0) {
+                                    $$ = power($1, $3);
+                                  } else {
+                                    $$ = power($1, $3 - 1);
+                                  }
+                                  minusexp = 0;
+                                }
+    | LBRACKET expr RBRACKET    { $$ = $2; }
+;
+
+%%
+
+int yyerror(string str) {
+    error = 1;
+    printf("%s\n", str.c_str());
+    return 0;
+}
+
+int main () {
+  return yyparse();
+}
