@@ -39,6 +39,7 @@ def t_error(t):
     t.lexer.skip(1)
     
 # Build the lexer
+from os import error
 import re
 import ply.lex as lex
 lexer = lex.lex()
@@ -100,10 +101,19 @@ def reci(a):
         x += P
     return x
 
+def NWD(a, b):
+    while a != b:
+       if a > b:
+           a -= b
+       else:
+           b -= a
+    return a
+
 
 # dictionary of names
 names = { }
 rpn = [] # reverse polnish notation
+error = 0
 
 def p_statement_assign(t):
     'statement : NAME EQUALS expression'
@@ -111,11 +121,17 @@ def p_statement_assign(t):
 
 def p_statement_expr(t):
     'statement : expression'
+    global error
     rpntext = ""
     for element in rpn:
         rpntext += element + " "
     rpn.clear()
-    print("{}\n= {}".format(rpntext, t[1]))
+    
+    if error == 0:
+        print("{}\n= {}".format(rpntext, t[1]))
+    else:
+        print("Bład")
+    error = 0
 
 def p_expression_binop(t):
     '''expression : expression PLUS expression
@@ -134,20 +150,51 @@ def p_expression_binop(t):
         t[0] = t[1] * t[3] % P
     elif t[2] == '/':
         rpn.append("/")
+        if t[3] == 0:
+            global error
+            error = 1
+            t[0] = 0
+            return 
         t[0] = t[1] * reci(t[3]) % P
     elif t[2] == '^':
         rpn.append('^')
         t[0] = pow(t[1], t[3], P)
+    
+def p_pwr_neg(t):
+    ''' pwr : MINUS pwr %prec UMINUS'''
+    rpn[len(rpn)-1] = str((P-1)-t[2])
+    t[0] = -t[2]
 
 def p_pwr_num(t):
     ''' pwr : NUMBER '''
     rpn.append(str(int(t[1]) % P))
     t[0] = int(t[1]) % P
     
-def p_pwr_neg(t):
-    ''' pwr : MINUS pwr %prec UMINUS'''
-    rpn[len(rpn)-1] = str(P-t[2])
-    t[0] = -t[2]
+def p_pwr_group(t):
+    ''' pwr : LPAREN pwr2 RPAREN'''
+    t[0] = t[2]
+    
+def p_pwr2_num(t):
+    ''' pwr2 : NUMBER '''
+    rpn.append(str(int(t[1]) % P))
+    t[0] = int(t[1]) % P
+    
+def p_pwr2_divide(t):
+    ''' pwr2 : pwr2 DIVIDE pwr2'''
+    global error, P
+    if t[3] == 0:
+        error = 1
+        t[0] = 1
+        return
+    else:
+        if NWD(t[3], P - 1) == 1:
+            P -= 1
+            rpn[len(rpn) - 1] = str(reci(t[3]))
+            t[0] = t[1] * reci(t[3])
+            P += 1
+        else:
+            t[0] = 1
+            error = 1
 
 def p_expression_uminus(t):
     'expression : MINUS expression %prec UMINUS'
@@ -181,7 +228,7 @@ parser = yacc.yacc()
 
 while True:
     try:
-        s = input('calc > ')   # Use raw_input on Python 2
+        s = input()   # Use raw_input on Python 2
     except EOFError:
         break
     parser.parse(s)
